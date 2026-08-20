@@ -1934,8 +1934,49 @@
     document.querySelectorAll('.reveal').forEach((el) => el.classList.add('in-view'));
   }
 
+  // ============ TRACKING: UTMs + referrer + fbclid + gclid + fbp ============
+  // Captura na 1a visita e persiste em sessionStorage. Se o usuario navegar
+  // e voltar ou abrir aba nova via link organico, mantem o tracking original.
+  (function captureTracking() {
+    const KEY = 'solclor_tracking';
+    const existing = (() => { try { return JSON.parse(sessionStorage.getItem(KEY) || '{}'); } catch { return {}; } })();
+
+    const params = new URLSearchParams(window.location.search);
+    const utmKeys = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term','fbclid','gclid','ttclid','msclkid'];
+
+    const tracking = { ...existing };
+    let updated = false;
+
+    utmKeys.forEach(k => {
+      const v = params.get(k);
+      if (v && !tracking[k]) { tracking[k] = v; updated = true; }
+    });
+
+    // Primeira visita — captura referrer, entry page, timestamp
+    if (!tracking.first_visit_time) {
+      tracking.first_visit_time = new Date().toISOString();
+      tracking.entry_page = window.location.href;
+      tracking.referrer = document.referrer || '(direto)';
+      tracking.user_agent = navigator.userAgent;
+      tracking.screen = `${window.screen.width}x${window.screen.height}`;
+      tracking.language = navigator.language;
+      updated = true;
+    }
+
+    if (updated) {
+      try { sessionStorage.setItem(KEY, JSON.stringify(tracking)); } catch {}
+    }
+  })();
+
+  // Le cookie por nome (usado pra pegar _fbp / _fbc do Facebook Pixel se instalado)
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'));
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
   // ============ FORMULARIO: envio ============
-  const APPS_SCRIPT_URL = '';  // TODO: colocar URL do Apps Script quando publicado
+  // COLE AQUI a URL do Apps Script Web App depois de publicar (Implantar > Web app)
+  const APPS_SCRIPT_URL = '';
   const form = document.getElementById('form-solclor');
   const status = document.getElementById('form-status');
   if (form) {
@@ -1951,8 +1992,22 @@
       status.className = 'form-status';
       status.textContent = '';
 
-      const data = Object.fromEntries(new FormData(form).entries());
-      data.origem = window.location.href;
+      // Merge: dados do form + tracking capturado na sessao + contexto atual
+      const formData = Object.fromEntries(new FormData(form).entries());
+      let tracking = {};
+      try { tracking = JSON.parse(sessionStorage.getItem('solclor_tracking') || '{}'); } catch {}
+
+      const payload = {
+        lp: 'piscinas',
+        ...formData,
+        ...tracking,
+        submit_time: new Date().toISOString(),
+        submit_page: window.location.href,
+        page_url: window.location.pathname + window.location.search,
+        fbp: getCookie('_fbp'),
+        fbc: getCookie('_fbc'),
+        origem: 'lp-piscinas-solclor',
+      };
 
       try {
         if (APPS_SCRIPT_URL) {
@@ -1960,13 +2015,12 @@
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
+            body: JSON.stringify(payload),
           });
         }
         status.className = 'form-status is-success';
         status.textContent = 'Recebemos seu contato! Nossa equipe comercial vai te chamar em breve.';
         form.reset();
-        // reset dos selects (voltar cor de placeholder)
         form.querySelectorAll('.form-select').forEach(s => s.classList.remove('has-value'));
       } catch (err) {
         status.className = 'form-status is-error';
