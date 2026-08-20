@@ -1123,6 +1123,24 @@
     }
   }
 </style>
+
+<!-- ============= META PIXEL — SOLCLOR ============= -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '223989146770871');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+  src="https://www.facebook.com/tr?id=223989146770871&ev=PageView&noscript=1"/></noscript>
+<!-- ============= FIM META PIXEL ============= -->
+
 </head>
 <body>
 
@@ -2029,6 +2047,9 @@
       status.className = 'form-status';
       status.textContent = '';
 
+      // event_id unico pra dedup CAPI vs Browser Pixel no futuro
+      const eventId = 'lead-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+
       // Merge: dados do form + tracking capturado na sessao + contexto atual
       const formData = Object.fromEntries(new FormData(form).entries());
       let tracking = {};
@@ -2038,6 +2059,7 @@
         lp: 'piscinas',
         ...formData,
         ...tracking,
+        event_id: eventId,
         submit_time: new Date().toISOString(),
         submit_page: window.location.href,
         page_url: window.location.pathname + window.location.search,
@@ -2055,14 +2077,16 @@
             body: JSON.stringify(payload),
           });
         }
-        status.className = 'form-status is-success';
-        status.textContent = 'Recebemos seu contato! Nossa equipe comercial vai te chamar em breve.';
-        form.reset();
-        form.querySelectorAll('.form-select').forEach(s => s.classList.remove('has-value'));
+        // Preserva UTMs + passa event_id na URL da obrigado
+        const utmParams = new URLSearchParams();
+        ['utm_source','utm_medium','utm_campaign','utm_content','utm_term','fbclid','gclid'].forEach(k => {
+          if (tracking[k]) utmParams.set(k, tracking[k]);
+        });
+        utmParams.set('eid', eventId);
+        window.location.href = '/obrigado.html?' + utmParams.toString();
       } catch (err) {
         status.className = 'form-status is-error';
         status.textContent = 'Ops, não conseguimos enviar agora. Tente novamente em instantes.';
-      } finally {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Quero comprar direto da fábrica';
       }
