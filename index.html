@@ -1732,7 +1732,8 @@
         <form id="form-solclor" novalidate>
           <div class="form-row form-row-2">
             <input class="form-input" type="text" name="nome" placeholder="Nome completo" required autocomplete="name" minlength="3">
-            <input class="form-input" type="tel" name="telefone" placeholder="Telefone / WhatsApp" required autocomplete="tel" inputmode="tel">
+            <input class="form-input" type="tel" name="telefone" placeholder="Telefone / WhatsApp" required autocomplete="tel" inputmode="tel"
+              id="input-tel" maxlength="15" pattern="\(\d{2}\)\s\d{4,5}-\d{4}" title="Informe DDD + número. Ex: (11) 99999-9999">
           </div>
 
           <div class="form-row form-row-2">
@@ -1974,8 +1975,40 @@
     return match ? decodeURIComponent(match[1]) : '';
   }
 
-  // ============ FORMULARIO: envio ============
-  // COLE AQUI a URL do Apps Script Web App depois de publicar (Implantar > Web app)
+  // ============ FORMULARIO: mascara + validacao + envio ============
+  // Valida telefone BR (DDD valido + 8 ou 9 digitos, celular precisa comecar com 9)
+  function validarTelefoneBR(digits) {
+    if (!digits) return 'Preencha o telefone';
+    if (digits.length < 10) return 'Numero incompleto — precisa DDD + 8 ou 9 digitos';
+    if (digits.length > 11) return 'Numero longo demais';
+    const ddd = parseInt(digits.slice(0, 2), 10);
+    const dddsValidos = [11,12,13,14,15,16,17,18,19,21,22,24,27,28,31,32,33,34,35,37,38,41,42,43,44,45,46,47,48,49,51,53,54,55,61,62,63,64,65,66,67,68,69,71,73,74,75,77,79,81,82,83,84,85,86,87,88,89,91,92,93,94,95,96,97,98,99];
+    if (!dddsValidos.includes(ddd)) return 'DDD invalido';
+    if (digits.length === 11 && digits[2] !== '9') return 'Celular precisa comecar com 9 depois do DDD';
+    return '';
+  }
+
+  // Mascara telefone: (11) 99999-9999
+  const tel = document.getElementById('input-tel');
+  if (tel) {
+    const format = (v) => {
+      v = v.replace(/\D/g, '').slice(0, 11);
+      if (v.length > 10)     v = v.replace(/(\d{2})(\d{5})(\d{0,4}).*/, '($1) $2-$3');
+      else if (v.length > 6) v = v.replace(/(\d{2})(\d{4})(\d{0,4}).*/, '($1) $2-$3');
+      else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+      else if (v.length > 0) v = v.replace(/(\d{0,2})/, '($1');
+      return v;
+    };
+    tel.addEventListener('input', (e) => {
+      const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+      e.target.value = format(e.target.value);
+      e.target.setCustomValidity(validarTelefoneBR(digits));
+    });
+    tel.addEventListener('blur', (e) => {
+      e.target.setCustomValidity(validarTelefoneBR(e.target.value.replace(/\D/g, '')));
+    });
+  }
+
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzDLNpDHhA8OJdxapfHZrV4MPDHMXFfCBHXSqf1XlIBGkPfOrzPSGWSCgparMtb0mgV/exec';
   const form = document.getElementById('form-solclor');
   const status = document.getElementById('form-status');
@@ -1983,7 +2016,11 @@
     const submitBtn = form.querySelector('.form-submit');
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      // Re-valida tel antes do submit (caso user tenha colado numero)
+      if (tel) tel.setCustomValidity(validarTelefoneBR(tel.value.replace(/\D/g, '')));
       if (!form.checkValidity()) {
+        const invalid = form.querySelector(':invalid');
+        if (invalid) invalid.focus();
         form.reportValidity();
         return;
       }
